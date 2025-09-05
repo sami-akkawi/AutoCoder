@@ -1,0 +1,50 @@
+name: Issue Info & API Demo
+
+on:
+  issues:
+    types: [opened, edited, labeled, assigned, reopened]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  log_issue_info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo issue details from github.event
+        run: |
+          echo "Issue Number: ${{ github.event.issue.number }}"
+          echo "Issue Title:  ${{ github.event.issue.title }}"
+          echo "Issue Body:   ${{ github.event.issue.body }}"
+          echo "Assignees:    ${{ join(github.event.issue.assignees.*.login, ', ') }}"
+          echo "Labels:       ${{ join(github.event.issue.labels.*.name, ', ') }}"
+
+      - name: Retrieve issue via GitHub API
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching issue #$ISSUE_NUMBER from $REPO via API…"
+          ISSUE_RESPONSE=$(curl -s \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER)
+          echo "Issue Information: $ISSUE_RESPONSE"
+
+      - name: Retrieve issue comments via GitHub API
+        if: ${{ github.event.issue.number != '' }}
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching comments for issue #$ISSUE_NUMBER…"
+          COMMENTS_RESPONSE=$(curl -s \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments)
+          echo "Comments: $COMMENTS_RESPONSE"
