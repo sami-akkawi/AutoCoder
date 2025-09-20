@@ -1,0 +1,63 @@
+name: Autocoder Bot
+
+on:
+  issues:
+    types: [opened, edited, labeled, reopened]
+  issue_comment:
+    types: [created, edited]
+
+# Minimal permissions for reading issue payloads and repo contents
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  generate_code:
+    # Run ONLY if the triggering issue has the "autocoder-bot" label
+    if: contains(join(github.event.issue.labels.*.name, ','), 'autocoder-bot')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure jq is available
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Make script executable
+        run: chmod +x ./script.sh
+
+      - name: Run autocoder script (GitHub + OpenAI)
+        env:
+          # Not strictly required as envs, but keeps values available for debugging if needed
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # Pass args in the EXACT order the script expects:
+          # 1) GITHUB_TOKEN  2) REPOSITORY  3) ISSUE_NUMBER  4) OPENAI_API_KEY
+          ./script.sh \
+            "${{ secrets.GITHUB_TOKEN }}" \
+            "${{ github.repository }}" \
+            "${{ github.event.issue.number }}" \
+            "${{ secrets.OPENAI_API_KEY }}"
+
+      - name: Upload generated files as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autocoder-artifact
+          path: |
+            autocoder-bot/**
+          if-no-files-found: error
+
+      - name: Download artifact to ./autocoder-artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: autocoder-artifact
+          path: autocoder-artifact
+
+      - name: List downloaded files (recursive)
+        run: ls -laR autocoder-artifact
